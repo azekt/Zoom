@@ -208,7 +208,7 @@ If (curWin) {
 	}
 }
 Return
-/*
+
 Numpad0::
 	SwitchMic(videoButton1PozX, videoButton1PozY, buttonColor, false)
 Return
@@ -224,7 +224,7 @@ Return
 Numpad3::
 	SwitchMic(videoButton2PozX, videoButton2PozY, buttonColor)
 Return
-*/
+
 SwitchMic(ByRef XPoz, ByRef YPoz, ByRef buttonColor, lowerHand := true)
 {
 	BlockInput, MouseMove
