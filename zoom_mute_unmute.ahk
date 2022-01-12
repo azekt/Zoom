@@ -222,7 +222,20 @@ Numpad2::
 Return
 
 Numpad3::
-	SwitchMic(videoButton2PozX, videoButton2PozY, buttonColor)
+	SwitchMic(videoButton3PozX, videoButton3PozY, buttonColor)
+Return
+
+; mute without lower hand
+Numpad4::
+	SwitchMic(videoButton1PozX, videoButton1PozY, buttonColor, false)
+Return
+
+Numpad5::
+	SwitchMic(videoButton2PozX, videoButton2PozY, buttonColor, false)
+Return
+
+Numpad6::
+	SwitchMic(videoButton3PozX, videoButton3PozY, buttonColor, false)
 Return
 
 SwitchMic(ByRef XPoz, ByRef YPoz, ByRef buttonColor, lowerHand := true)
