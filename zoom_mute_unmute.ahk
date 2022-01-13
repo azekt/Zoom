@@ -6,10 +6,9 @@ ListLines, Off
 CoordMode, Mouse, Client
 CoordMode, Pixel, Client
 ; Settings
-minRatio := 11
 maxPcpsCount := 49
 debug := true
-debugWinTransp := 100
+debugWinTransp := 60
 
 ; variables pre-declaration
 oldPcpsCount := 0
@@ -21,7 +20,7 @@ oldListWidth := 0
 oldVSWidth := 0
 buttonXoffset := -70
 buttonYoffset := 22
-recountAgain := 0
+recountFlag := false
 global videoShare := false
 global videoShareClass := false
 global buttonColor := false
@@ -33,7 +32,7 @@ if (debug) {
 	Gui, VideoGUI:Margin, 0, 0
 	Gui, VideoGUI:Color, 66ff33
 	Gui, VideoGUI:Font, cBlack s13 bold, Arial
-	Gui, VideoGUI:Add, Edit, ReadOnly r9 vTextarea y5 x5
+	Gui, VideoGUI:Add, Edit, ReadOnly r9 vTextarea w300 y5 x5
 	WinSet, Transparent, %debugWinTransp%
 
 	Gui, HelperGUI:New, +AlwaysOnTop -Caption +Owner +LastFound +E0x20
@@ -47,7 +46,7 @@ if (debug) {
 	WinSet, Transparent, %debugWinTransp%
 }
 ; ---------
-SetTimer, CheckParticipants, 1000
+SetTimer, CheckParticipants, 250
 Return
 
 CheckParticipants:
@@ -58,7 +57,7 @@ If (curWin) {
 	GetClientSize(curWin, winWidth, winHeight)
 	ControlGetText, str, zPlistWndClass1, %winTitle%
 	ControlGetPos, , , listWidth, , zRightPanelContainerClass1, %winTitle%
-	vsWidth := VideoShareWidth()
+	vsWidth := VideoShareWidth(WinPosX, WinPosY)
 	pcpsCount := SubStr(str, 15, -1) ; participant's counter
 	if (pcpsCount > maxPcpsCount) {
 		pcpsCount := maxPcpsCount
@@ -71,67 +70,76 @@ If (curWin) {
 	;   * participant's panel's resize
 	;   * participant's number changing
 	; changed
-	if ((oldPcpsCount != pcpsCount)
-			|| IsVideoShareChanged()
-			|| (vsWidth != oldVSWidth)
-			|| (WinPosX != oldWinPosX)
-			|| (WinPosY != oldWinPosY)
-			|| (winWidth != oldWinWidth)
-			|| (winHeight != oldWinHeight)
-			|| (oldListWidth != listWidth)
-			|| recountAgain)
-		{
+
+	changesFlag := (oldPcpsCount != pcpsCount)
+		|| IsVideoShareChanged()
+		|| (vsWidth != oldVSWidth)
+		|| (WinPosX != oldWinPosX)
+		|| (WinPosY != oldWinPosY)
+		|| (winWidth != oldWinWidth)
+		|| (winHeight != oldWinHeight)
+		|| (oldListWidth != listWidth)
+	/*
+	chA := oldPcpsCount != pcpsCount
+	chB :=	IsVideoShareChanged()
+	chC := vsWidth != oldVSWidth
+	chD := WinPosX != oldWinPosX
+	chE := WinPosY != oldWinPosY
+	chF := winWidth != oldWinWidth
+	chG := winHeight != oldWinHeight
+	chH := oldListWidth != listWidth
+	msgbox %chA% %chB% %chC% %chD% %chE% %chF% %chG% %chH% 
+	*/
+	
+	
+	if (changesFlag || recountFlag) {
+		oldPcpsCount := pcpsCount
+		oldVSWidth := vsWidth
 		oldWinPosX := WinPosX
 		oldWinPosY := WinPosY
 		oldWinWidth := winWidth
 		oldWinHeight := winHeight
-		oldPcpsCount := pcpsCount
 		oldListWidth := listWidth
+				
 		fieldWidth := winWidth - listWidth
 		fieldHeight := winHeight - 53 - 53
 		if (vsWidth > 0) {
-			fieldWidth := fieldWidth - vsWidth - 18
+			fieldWidth := fieldWidth - vsWidth - 6 - 14 - 6
 			fieldHeight := winHeight - 95 - 95
 		}
-		recountAgain := recountAgain * -1
-
-		maxRatio := 0
-		maxRatioIndex := 1
-		pcpsCountL := Ceil(sqrt(pcpsCount)) + 1
-		pcpsCount++ ; we add one participant to minus it in while loop :-)
-		opCount := 0 ; for debuging only
-		while ((maxRatio < minRatio) && (pcpsCount > 0)) {
+		; We put flag every time something changed to recount
+		; If we did and there is no more changes we can stop
+		recountFlag := true
+		if (!changesFlag && recountFlag) {
+			recountFlag := false
+		}		
+		
+		pcpsCount++ ; add participant that we could minus in loop
+		maxColumn := fieldWidth / 160
+		Loop {
 			pcpsCount--
-			Loop, %pcpsCountL% {
-				p := Ceil(pcpsCount / A_Index)
-				rC := fieldHeight / (9 * p)
-				opCount++ ; for debuging only
-				if (rC > minRatio) {
-					cC := fieldWidth / (16 * A_Index)
-					m := Min(cC, rC)
-					if (m > maxRatio) {
-						maxRatioIndex := A_Index
-						maxRatio := m
-					}
-					opCount++ ; for debuging only
-				}
-				cC := fieldWidth / (16 * p)
-				opCount++ ; for debuging only
-				if (cC > minRatio) {
-					rC := fieldHeight / (9 * A_Index)
-					m := Min(cC, rC)
-					if (m > maxRatio) {
-						maxRatioIndex := p
-						maxRatio := m
-					}
-					opCount++ ; for debuging only
-				}
-			}
+			bestColumn := Sqrt((16 * fieldWidth * pcpsCount) / (16 * fieldHeight))
+		} Until ((bestColumn < maxColumn) || (pcpsCount < 0))
+		
+		pCeil := Ceil(bestColumn)
+		cC := fieldWidth / (16 * pCeil)
+		rC := fieldHeight / (9 * (pcpsCount / pCeil))
+		mCeil := Min(cC, rC)
+		pFloor := Floor(bestColumn)
+		cC := fieldWidth / (16 * pFloor)
+		rC := fieldHeight / (9 * (pcpsCount / pFloor))
+		mFloor := Min(cC, rC)
+		if (mFloor > mCeil) {
+			columnsCount := pFloor
+			maxRatio := mFloor ; for debuging only
+		} else {
+			columnsCount := pCeil
+			maxRatio := mCeil ; for debuging only
 		}
 		if (debug) {
-			GuiControl, HelperGUI:Text, helperGuiText, %A_TickCount%`n%videoShareClass%`n%videoShare%
+			GuiControl, HelperGUI:Text, helperGuiText, %A_TickCount% cFlag %changesFlag% rFlag %recountFlag%
 		}
-		columnsCount := maxRatioIndex
+		
 		rowsCount := Ceil(pcpsCount / columnsCount)
 		rowsSpace := (rowsCount - 1) * 6
 		columnsSpace := (columnsCount - 1) * 6
@@ -149,32 +157,19 @@ If (curWin) {
 		; windowX - clientX = 8 px
 		; windowY - clientY = 31 px
 		; upper and control panels  - 53 px;
-
-		videoPozX := (fieldWidth - (videoWidth * columnsCount + columnsSpace)) / 2
-		videoPozY := (fieldHeight - (videoHeight * rowsCount + rowsSpace)) / 2 + 53
-
-		
-
 		; sometimes Zoom decides to make video little smaller - i don't know why :-(
 		; we have to check it
-		pixX := Ceil((fieldWidth - (videoWidth * columnsCount + columnsSpace)) / 2) + 1
-		pixY := Ceil((fieldHeight - (videoHeight * rowsCount + rowsSpace)) / 2) + 53 + 1
-		if (vsWidth > 0) {
-			videoPozX := videoPozX + vsWidth + 18
-			videoPozY := videoPozY + 42
-			pixX := pixX + vsWidth + 18
-			pixY := pixY + 42
-		}
-		
-		PixelGetColor, color, %pixX%, %pixY%, RGB
+
+		videoWidth := videoWidth + 16 ; add now, minus in loop
+		videoHeight := videoHeight + 9
 		nr := 0
-		while (color = 0x1A1A1A && nr < 1) {
+		Loop {
 			nr++
 			videoWidth := videoWidth - 16
 			videoHeight := videoHeight - 9
 			videoPozX := Ceil((fieldWidth - (videoWidth * columnsCount + columnsSpace)) / 2)
 			videoPozY := Ceil((fieldHeight - (videoHeight * rowsCount + rowsSpace)) / 2) + 53
-			pixX := Ceil((fieldWidth - (videoWidth * columnsCount + columnsSpace)) / 2) + 1
+			pixX := Ceil((fieldWidth - (videoWidth * columnsCount + columnsSpace)) / 2) + 2
 			pixY := Ceil((fieldHeight - (videoHeight * rowsCount + rowsSpace)) / 2) + 53 + 1
 			if (vsWidth > 0) {
 				videoPozX := videoPozX + vsWidth + 18
@@ -182,9 +177,8 @@ If (curWin) {
 				pixX := pixX + vsWidth + 18
 				pixY := pixY + 42
 			}
-
 			PixelGetColor, color, %pixX%, %pixY%, RGB
-		}
+		} Until ((color != 0x1A1A1A) || (nr < 2))
 		
 		videoButton1PozX := videoPozX + videoWidth + buttonXoffset
 		videoButton1PozY := videoPozY + buttonYoffset
@@ -214,7 +208,7 @@ If (curWin) {
 				}
 			}
 		}
-	
+		
 		; --- for debuging only ---
 		if (debug) {
 			videoGuiPozX :=	videoPozX + WinPosX + 8
@@ -223,18 +217,17 @@ If (curWin) {
 			videoGuiPozY = y%videoGuiPozY%
 			videoGuiWidth = w%videoWidth%
 			videoGuiHeight = h%videoHeight%
-			GuiControl, VideoGUI:Text, Textarea, %videoPozX%, %videoPozY%`nRatio: %maxRatio%`nVS width:%vsWidth%`n%nr%
+			GuiControl, VideoGUI:Text, Textarea, %videoPozX%, %videoPozY%`nRatio: %maxRatio%`ncolor %buttonColor%`nvidClass: %videoShareClass%`nVS width: %vsWidth%`nchangesFlag %changesFlag% recountFlag %recountFlag%`nnr %nr%
 			Gui, VideoGUI:Show, NoActivate %videoGuiPozX% %videoGuiPozY% %videoGuiWidth% %videoGuiHeight%
-			;Sleep, 700
-			;Gui, VideoGUI:Hide
+			sleep, 700
+			Gui, VideoGUI:Hide
 		}
 		; ---------2123
 	}
 }
 Return
 
-#IfWinActive ahk_class ZPContentViewWndClass
-/*
+#IfWinExist ahk_class ZPContentViewWndClass
 Numpad0::
 	SwitchMic(videoButton1PozX, videoButton1PozY, false)
 Return
@@ -263,10 +256,19 @@ Return
 Numpad6::
 	SwitchMic(videoButton3PozX, videoButton3PozY, false)
 Return
-*/
+
 F9::
-	cl := GetVideoShareClass()
+winTitle := "ahk_class ZPContentViewWndClass"
+curWin := WinExist(winTitle)
+If (curWin) {
+	WinGetPos, WinPosX, WinPosY, , , %winTitle%
+	cl := GetVideoShareClass(WinPosX, WinPosY)
 	msgbox %cl%
+}
+Return
+
+F12::
+	videoShareClass := false
 Return
 
 ; --- for debuging only ---
@@ -309,24 +311,25 @@ SwitchMic(ByRef XPoz, ByRef YPoz, lowerHand := true) {
 	
 	if (color = buttonColor) {
 		;msgbox unmute!
-		MouseMove, XPoz+10, YPoz, 2 ; unmute
+		MouseMove, XPoz + 10, YPoz, 2 ; unmute
 		;Sleep, 100
 		Click
 	} else {
 		;msgbox mute and lower hand
-		MouseMove, XPoz+10, YPoz, 2 ; mute first
+		MouseMove, XPoz + 10, YPoz, 2 ; mute first
 		;Sleep, 100
 		Click
 		;Sleep, 100
 		if (lowerHand) {
-			MouseMove, XPoz, YPoz+10, 2 ; then lower hand
+			MouseMove, XPoz, YPoz + 10, 2 ; then lower hand
 			;Sleep, 100
 			Click, right
-			MouseMove, XPoz+20, YPoz+30, 2
+			MouseMove, XPoz + 20, YPoz + 30, 2
 			;Sleep, 100
 			Click
 		}
 	}
+	MouseMove, XPoz + 10, YPoz - 30, 2 ; move away from buttons
 	BlockInput, MouseMoveOff
 }
 
@@ -349,7 +352,7 @@ GetClientSize(hWnd, ByRef w := "", ByRef h := "") {
 }
 
 IsVideoShareChanged() {
-	;msgbox %videoshare%
+	winE := WinExist("Screen share viewing options")
 	if (videoShare) {
 		if (!WinExist("Screen share viewing options")) {
 			videoShare := false
@@ -364,11 +367,11 @@ IsVideoShareChanged() {
 	return false
 }
 
-VideoShareWidth() {
+VideoShareWidth(ByRef XPoz, ByRef YPoz) {
 	; There is a problem to get "ahk_class [TAB]ZPControlPanelHintClass" because of TAB char
 	if (WinExist("Screen share viewing options")) {
 		if (!videoShareClass) {
-			videoShareClass := GetVideoShareClass()
+			videoShareClass := GetVideoShareClass(XPoz, YPoz)
 		}
 		ControlGetPos, , , w,, %videoShareClass%, ahk_class ZPContentViewWndClass
 		return w
@@ -376,24 +379,17 @@ VideoShareWidth() {
 	return 0
 }
 
-GetVideoShareClass(){
-	WinActivate, ahk_class ZPContentViewWndClass
+GetVideoShareClass(ByRef winX, ByRef winY){
+	Sleep, 1000
+	CoordMode, Mouse, Screen
 	BlockInput, MouseMove
 	MouseGetPos, x, y
-	MouseMove, 100, y, 0
+	mX := winX + 30
+	mY := winY + 150
+	MouseMove, mX, mY, 0
 	MouseGetPos, , , , className
 	MouseMove, x, y, 0
+	CoordMode, Mouse, Client
 	BlockInput, MouseMoveOff
 	return className
 }
-/*
-
-ClassNN:	CASView_0x2BB762701
-Text:	
-	x: 14	y: 84	w: 816	h: 882
-Client:	x: 6	y: 53	w: 816	h: 882
-
-
-Screen share viewing options
-ahk_class 	ZPControlPanelHintClass
-*/
