@@ -79,18 +79,6 @@ If (curWin) {
 		|| (winWidth != oldWinWidth)
 		|| (winHeight != oldWinHeight)
 		|| (oldListWidth != listWidth)
-	/*
-	chA := oldPcpsCount != pcpsCount
-	chB :=	IsVideoShareChanged()
-	chC := vsWidth != oldVSWidth
-	chD := WinPosX != oldWinPosX
-	chE := WinPosY != oldWinPosY
-	chF := winWidth != oldWinWidth
-	chG := winHeight != oldWinHeight
-	chH := oldListWidth != listWidth
-	msgbox %chA% %chB% %chC% %chD% %chE% %chF% %chG% %chH% 
-	*/
-	
 	
 	if (changesFlag || recountFlag) {
 		oldPcpsCount := pcpsCount
@@ -208,7 +196,7 @@ If (curWin) {
 				}
 			}
 		}
-		
+
 		; --- for debuging only ---
 		if (debug) {
 			videoGuiPozX :=	videoPozX + WinPosX + 8
@@ -222,7 +210,7 @@ If (curWin) {
 			sleep, 700
 			Gui, VideoGUI:Hide
 		}
-		; ---------2123
+		; ---------
 	}
 }
 Return
@@ -352,7 +340,6 @@ GetClientSize(hWnd, ByRef w := "", ByRef h := "") {
 }
 
 IsVideoShareChanged() {
-	winE := WinExist("Screen share viewing options")
 	if (videoShare) {
 		if (!WinExist("Screen share viewing options")) {
 			videoShare := false
@@ -380,7 +367,6 @@ VideoShareWidth(ByRef XPoz, ByRef YPoz) {
 }
 
 GetVideoShareClass(ByRef winX, ByRef winY){
-	Sleep, 1000
 	CoordMode, Mouse, Screen
 	BlockInput, MouseMove
 	MouseGetPos, x, y
