@@ -2,13 +2,13 @@
 #NoEnv
 SetBatchLines, -1
 ListLines, Off
-
 CoordMode, Mouse, Client
 CoordMode, Pixel, Client
 ; Settings
 maxPcpsCount := 49
 debug := true
-debugWinTransp := 60
+refreshTime := 100
+debugWinTransp := 100
 
 ; variables pre-declaration
 oldPcpsCount := 0
@@ -24,8 +24,7 @@ recountFlag := false
 global videoShare := false
 global videoShareClass := false
 global buttonColor := false
-;buttonColor := 0x0D67D8
-;buttonColor := 0x0D68D8
+
 ; --- for debuging only ---
 if (debug) {
 	Gui, VideoGUI:New, +AlwaysOnTop -Caption +Owner +LastFound +E0x20
@@ -46,7 +45,7 @@ if (debug) {
 	WinSet, Transparent, %debugWinTransp%
 }
 ; ---------
-SetTimer, CheckParticipants, 250
+SetTimer, CheckParticipants, %refreshTime%
 Return
 
 CheckParticipants:
@@ -89,51 +88,85 @@ If (curWin) {
 		oldWinHeight := winHeight
 		oldListWidth := listWidth
 				
-		fieldWidth := winWidth - listWidth
-		fieldHeight := winHeight - 53 - 53
+		fieldWidth := winWidth - listWidth - 12
+		fieldHeight := winHeight - 59 - 59 ;- 53 - 53
 		if (vsWidth > 0) {
-			fieldWidth := fieldWidth - vsWidth - 6 - 14 - 6
-			fieldHeight := winHeight - 95 - 95
+			fieldWidth := fieldWidth - vsWidth - 18
+			fieldHeight := fieldHeight - 36 - 36
 		}
 		; We put flag every time something changed to recount
 		; If we did and there is no more changes we can stop
+		
 		recountFlag := true
 		if (!changesFlag && recountFlag) {
 			recountFlag := false
-		}		
+		}
 		
+		maxColumn := min(fieldWidth / 160, pcpsCount+1)
 		pcpsCount++ ; add participant that we could minus in loop
-		maxColumn := fieldWidth / 160
 		Loop {
-			pcpsCount--
-			bestColumn := Sqrt((16 * fieldWidth * pcpsCount) / (16 * fieldHeight))
-		} Until ((bestColumn < maxColumn) || (pcpsCount < 0))
-		
-		pCeil := Ceil(bestColumn)
-		cC := fieldWidth / (16 * pCeil)
-		rC := fieldHeight / (9 * (pcpsCount / pCeil))
-		mCeil := Min(cC, rC)
-		pFloor := Floor(bestColumn)
-		cC := fieldWidth / (16 * pFloor)
-		rC := fieldHeight / (9 * (pcpsCount / pFloor))
-		mFloor := Min(cC, rC)
-		if (mFloor > mCeil) {
-			columnsCount := pFloor
-			maxRatio := mFloor ; for debuging only
-		} else {
-			columnsCount := pCeil
-			maxRatio := mCeil ; for debuging only
-		}
-		if (debug) {
-			GuiControl, HelperGUI:Text, helperGuiText, %A_TickCount% cFlag %changesFlag% rFlag %recountFlag%
-		}
-		
+			Loop {
+				pcpsCount--
+				bestColumn := Sqrt((9 * fieldWidth * pcpsCount) / (16 * fieldHeight))
+			;	msgbox bestColumn %bestColumn%
+			} Until ((bestColumn <= maxColumn) || (pcpsCount < 0))
+			
+			if (bestColumn >= 1) {
+				pFloor := Floor(bestColumn)
+				cC := fieldWidth / (16 * pFloor)
+				rC := fieldHeight / (9 * (Ceil(pcpsCount / pFloor)))
+				mFloor := Min(cC, rC)
+			} else {
+				mFloor := 0
+			}
+			pCeil := Ceil(bestColumn)
+			if (pCeil <= pcpsCount) {
+				cC := fieldWidth / (16 * pCeil)
+				rC := fieldHeight / (9 * (Ceil(pcpsCount / pCeil)))
+				mCeil := Min(cC, rC)
+				if (pCeilPlus <= pcpsCount) {
+					pCeilPlus := Ceil(bestColumn) + 1
+					cC := fieldWidth / (16 * pCeilPlus)
+					rC := fieldHeight / (9 * (Ceil(pcpsCount / pCeilPlus)))
+					mCeilPlus := Min(cC, rC)
+				} else {
+					mCeilPlus := 0
+				}
+				if (mCeilPlus > mCeil) {
+					if (mCeilPlus > mFloor) {
+						Gui, VideoGUI:Color, FF0000
+						columnsCount := pCeilPlus
+						maxRatio := mCeilPlus ; for debuging only
+					} else {
+						Gui, VideoGUI:Color, 00FF00
+						columnsCount := pFloor
+						maxRatio := mFloor ; for debuging only
+					}
+				} else {	
+					if (mCeil > mFloor) {
+						Gui, VideoGUI:Color, ffff00
+						columnsCount := pCeil
+						maxRatio := mCeil ; for debuging only
+					} else {
+						Gui, VideoGUI:Color, 00FF00
+						columnsCount := pFloor
+						maxRatio := mFloor ; for debuging only
+					}
+				}
+			} else {
+				Gui, VideoGUI:Color, 00FF00
+				columnsCount := pFloor
+				maxRatio := mFloor ; for debuging only
+			}
+			
+		} Until (maxRatio >= 10 || (pcpsCount < 0))
+		;msgbox columnsCount %columnsCount%
 		rowsCount := Ceil(pcpsCount / columnsCount)
 		rowsSpace := (rowsCount - 1) * 6
 		columnsSpace := (columnsCount - 1) * 6
 		maxPossHeight := (fieldHeight - rowsSpace) / rowsCount
 		maxPossHeight := Floor(maxPossHeight / 9) * 9
-		maxPossWidth := (fieldWidth - (columnsCount - 1) * 6) / columnsCount
+		maxPossWidth := (fieldWidth - columnsSpace) / columnsCount
 		maxPossWidth := Floor(maxPossWidth / 16) * 16
 		if (maxPossWidth * 0.5625 < maxPossHeight) {
 			videoHeight := maxPossWidth * 0.5625
@@ -150,23 +183,29 @@ If (curWin) {
 
 		videoWidth := videoWidth + 16 ; add now, minus in loop
 		videoHeight := videoHeight + 9
+		
 		nr := 0
+		colStr := ""
 		Loop {
 			nr++
 			videoWidth := videoWidth - 16
 			videoHeight := videoHeight - 9
-			videoPozX := Ceil((fieldWidth - (videoWidth * columnsCount + columnsSpace)) / 2)
-			videoPozY := Ceil((fieldHeight - (videoHeight * rowsCount + rowsSpace)) / 2) + 53
-			pixX := Ceil((fieldWidth - (videoWidth * columnsCount + columnsSpace)) / 2) + 2
-			pixY := Ceil((fieldHeight - (videoHeight * rowsCount + rowsSpace)) / 2) + 53 + 1
+			videoPozX := Ceil((fieldWidth - (videoWidth * columnsCount + columnsSpace)) / 2) + 6
+			videoPozY := Ceil((fieldHeight - (videoHeight * rowsCount + rowsSpace)) / 2) + 53 + 6
+			pixX := videoPozX + 1
+			pixY := videoPozY + 1
 			if (vsWidth > 0) {
-				videoPozX := videoPozX + vsWidth + 18
-				videoPozY := videoPozY + 42
-				pixX := pixX + vsWidth + 18
-				pixY := pixY + 42
+				videoPozX := videoPozX + vsWidth + 21
+				videoPozY := videoPozY + 36
+				pixX := pixX + vsWidth + 21
+				pixY := pixY + 36
 			}
 			PixelGetColor, color, %pixX%, %pixY%, RGB
-		} Until ((color != 0x1A1A1A) || (nr < 2))
+			if (debug) {
+				GuiControl, HelperGUI:Text, helperGuiText, In %nWejscie% In %nWyjscie% %nr%
+			}
+			colStr := colStr . " X " . pixX . " Y " . pixY . " " . SubStr(color, 3, 6)
+		} Until ((color != 0x1A1A1A) || (nr > 1))
 		
 		videoButton1PozX := videoPozX + videoWidth + buttonXoffset
 		videoButton1PozY := videoPozY + buttonYoffset
@@ -196,26 +235,28 @@ If (curWin) {
 				}
 			}
 		}
-
+		
+		helperGuiPozX := WinPosX + 8 + 6
+		helperGuiPozY := WinPosY + 31 + 95
+		;Gui, helperGUI:Show, NoActivate x%helperGuiPozX% y%helperGuiPozY% w500 h200
 		; --- for debuging only ---
 		if (debug) {
 			videoGuiPozX :=	videoPozX + WinPosX + 8
 			videoGuiPozY :=	videoPozY + WinPosY + 31
-			videoGuiPozX = x%videoGuiPozX%
-			videoGuiPozY = y%videoGuiPozY%
-			videoGuiWidth = w%videoWidth%
-			videoGuiHeight = h%videoHeight%
-			GuiControl, VideoGUI:Text, Textarea, %videoPozX%, %videoPozY%`nRatio: %maxRatio%`ncolor %buttonColor%`nvidClass: %videoShareClass%`nVS width: %vsWidth%`nchangesFlag %changesFlag% recountFlag %recountFlag%`nnr %nr%
-			Gui, VideoGUI:Show, NoActivate %videoGuiPozX% %videoGuiPozY% %videoGuiWidth% %videoGuiHeight%
-			sleep, 700
-			Gui, VideoGUI:Hide
+			GuiControl, VideoGUI:Text, Textarea, %fieldWidth%, %fieldHeight%`n%videoWidth% %videoHeight%`nRatio: %maxRatio%`nbestColumn %bestColumn%`nchangesFlag %changesFlag% recountFlag %recountFlag%`nnr %nr%`nmFloor %mFloor%,  mCeil %mCeil%
+			Gui, VideoGUI:Show, NoActivate x%videoGuiPozX% y%videoGuiPozY% w%videoWidth% h%videoHeight%
+			;sleep, 200
+			;Gui, VideoGUI:Hide
 		}
 		; ---------
 	}
+} else {
+	Gui, VideoGUI:Hide
+	Gui, HelperGUI:Hide
 }
 Return
 
-#IfWinExist ahk_class ZPContentViewWndClass
+#IfWinActive ahk_class ZPContentViewWndClass
 Numpad0::
 	SwitchMic(videoButton1PozX, videoButton1PozY, false)
 Return
@@ -265,7 +306,7 @@ WinActivate, ahk_class ZPContentViewWndClass
 MouseGetPos, mouseX, mouseY
 BlockInput, MouseMove
 if (debug) {
-	Gui, VideoGUI:Show, NoActivate %videoGuiPozX% %videoGuiPozY% %videoGuiWidth% %videoGuiHeight%
+	Gui, VideoGUI:Show, NoActivate x%videoGuiPozX% y%videoGuiPozY% w%videoWidth% h%videoHeight%
 }
 MouseMove, videoButton1PozX, videoButton1PozY, 2 ; first participant
 Sleep, 200
