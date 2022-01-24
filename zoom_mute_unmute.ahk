@@ -8,7 +8,7 @@ CoordMode, Pixel, Client
 maxPcpsCount := 49
 debug := true
 refreshTime := 100
-debugWinTransp := 100
+debugWinTransp := 60
 
 ; variables pre-declaration
 oldPcpsCount := 0
@@ -30,14 +30,14 @@ if (debug) {
 	Gui, VideoGUI:New, +AlwaysOnTop -Caption +Owner +LastFound +E0x20
 	Gui, VideoGUI:Margin, 0, 0
 	Gui, VideoGUI:Color, 66ff33
-	Gui, VideoGUI:Font, cBlack s13 bold, Arial
+	Gui, VideoGUI:Font, cBlack s11 bold, Arial
 	Gui, VideoGUI:Add, Edit, ReadOnly r9 vTextarea w300 y5 x5
 	WinSet, Transparent, %debugWinTransp%
 
 	Gui, HelperGUI:New, +AlwaysOnTop -Caption +Owner +LastFound +E0x20
 	Gui, HelperGUI:Margin, 0, 0
 	Gui, HelperGUI:Color, FF0000
-	Gui, HelperGUI:Font, cWhite s13 bold, Arial
+	Gui, HelperGUI:Font, cWhite s11 bold, Arial
 	Gui, HelperGUI:Add, Text, vhelperGuiText Left x10 y10
 	GuiControl, HelperGUI:Move, helperGuiText, w200 Center
 	GuiControl, HelperGUI:Text, helperGuiText, ---
@@ -109,56 +109,47 @@ If (curWin) {
 				pcpsCount--
 				bestColumn := Sqrt((9 * fieldWidth * pcpsCount) / (16 * fieldHeight))
 			;	msgbox bestColumn %bestColumn%
-			} Until ((bestColumn <= maxColumn) || (pcpsCount < 0))
+			} Until ((bestColumn <= maxColumn) || (pcpsCount < 1))
 			
-			if (bestColumn >= 1) {
-				pFloor := Floor(bestColumn)
-				cC := fieldWidth / (16 * pFloor)
-				rC := fieldHeight / (9 * (Ceil(pcpsCount / pFloor)))
-				mFloor := Min(cC, rC)
-			} else {
-				mFloor := 0
-			}
-			pCeil := Ceil(bestColumn)
-			if (pCeil <= pcpsCount) {
-				cC := fieldWidth / (16 * pCeil)
-				rC := fieldHeight / (9 * (Ceil(pcpsCount / pCeil)))
-				mCeil := Min(cC, rC)
-				if (pCeilPlus <= pcpsCount) {
-					pCeilPlus := Ceil(bestColumn) + 1
-					cC := fieldWidth / (16 * pCeilPlus)
-					rC := fieldHeight / (9 * (Ceil(pcpsCount / pCeilPlus)))
-					mCeilPlus := Min(cC, rC)
+			c := Ceil(pcpsCount / bestColumn)
+			if (c > 0) {
+				m := fieldHeight / (9 * c)
+				nineM := 9 * m
+				nineMP := nineM * pcpsCount
+				lowerRange := Ceil(nineMP / fieldHeight)
+				upperRange := Ceil((-1 * nineMP) / (nineM - fieldHeight))
+				
+				cL := fieldWidth / (16 * lowerRange)
+				rL := fieldHeight / (9 * (Ceil(pcpsCount / lowerRange)))
+				mL := Min(cL, rL)
+				if (lowerRange != upperRange) {
+					cU := fieldWidth / (16 * upperRange)
+					rU := fieldHeight / (9 * (Ceil(pcpsCount / upperRange)))
+					mU := Min(cU, rU)
+					mLU := mU / mL
+					if ((mL > mU) || (mU/mL < 1.04)) {
+						columnsCount := lowerRange
+						maxRatio := mL
+					} else {
+						columnsCount := upperRange
+						maxRatio := mU
+					}
 				} else {
-					mCeilPlus := 0
+					cU := cL
+					columnsCount := lowerRange
+					maxRatio := mL
 				}
-				if (mCeilPlus > mCeil) {
-					if (mCeilPlus > mFloor) {
-						Gui, VideoGUI:Color, FF0000
-						columnsCount := pCeilPlus
-						maxRatio := mCeilPlus ; for debuging only
-					} else {
-						Gui, VideoGUI:Color, 00FF00
-						columnsCount := pFloor
-						maxRatio := mFloor ; for debuging only
-					}
-				} else {	
-					if (mCeil > mFloor) {
-						Gui, VideoGUI:Color, ffff00
-						columnsCount := pCeil
-						maxRatio := mCeil ; for debuging only
-					} else {
-						Gui, VideoGUI:Color, 00FF00
-						columnsCount := pFloor
-						maxRatio := mFloor ; for debuging only
+				if (cU < m) {
+					rL := fieldHeight / (9 * (Ceil(pcpsCount / (lowerRange - 1))))
+					if (rL > maxRatio) {
+						columnsCount := lowerRange - 1
+						maxRatio := rl
 					}
 				}
 			} else {
-				Gui, VideoGUI:Color, 00FF00
-				columnsCount := pFloor
-				maxRatio := mFloor ; for debuging only
+				columnsCount := pcpsCount
+				maxRatio := 999999
 			}
-			
 		} Until (maxRatio >= 10 || (pcpsCount < 0))
 		;msgbox columnsCount %columnsCount%
 		rowsCount := Ceil(pcpsCount / columnsCount)
@@ -243,7 +234,7 @@ If (curWin) {
 		if (debug) {
 			videoGuiPozX :=	videoPozX + WinPosX + 8
 			videoGuiPozY :=	videoPozY + WinPosY + 31
-			GuiControl, VideoGUI:Text, Textarea, %fieldWidth%, %fieldHeight%`n%videoWidth% %videoHeight%`nRatio: %maxRatio%`nbestColumn %bestColumn%`nchangesFlag %changesFlag% recountFlag %recountFlag%`nnr %nr%`nmFloor %mFloor%,  mCeil %mCeil%
+			GuiControl, VideoGUI:Text, Textarea, %fieldWidth%, %fieldHeight%`n%videoWidth% %videoHeight%`nRatio: %maxRatio%`nbestColumn %bestColumn%`nlowerR %lowerRange%, %mL% `nupperR %upperRange% %mU%`nmLU %mLU%`nchangesFlag %changesFlag% recountFlag %recountFlag%`nnr %nr%
 			Gui, VideoGUI:Show, NoActivate x%videoGuiPozX% y%videoGuiPozY% w%videoWidth% h%videoHeight%
 			;sleep, 200
 			;Gui, VideoGUI:Hide
@@ -298,6 +289,51 @@ Return
 
 F12::
 	videoShareClass := false
+Return
+
+!NumpadAdd::
+	; --- unmute and spotlight first two participants
+	WinActivate, ahk_class ZPContentViewWndClass
+	BlockInput, MouseMove
+	MouseMove, videoButton1PozX + 10, videoButton1PozY, 2 ; unmute first pcp
+	Sleep, 50
+	Click
+	MouseMove, videoButton1PozX, videoButton1PozY + 10, 2 ; then spotlight
+	Click, right
+	MouseMove, videoButton1PozX + 20, videoButton1PozY + 135, 2
+	Click
+	Sleep, 50
+	Send !{F2}
+	MouseMove, videoButton2PozX + 10, videoButton2PozY, 2 ; unmute second pcp
+	Sleep, 50
+	Click
+	MouseMove, videoButton2PozX, videoButton2PozY + 10, 2 ; add to spotlight
+	Click, right
+	MouseMove, videoButton2PozX + 20, videoButton2PozY + 130, 2
+	Click
+	Sleep, 50
+	Send !{F2}
+	BlockInput, MouseMoveOff
+Return
+
+!NumpadSub::
+	; --- remove spotlight and mute first two participants
+	WinActivate, ahk_class ZPContentViewWndClass
+	XPoz := winWidth - listWidth
+	BlockInput, MouseMove
+	MouseMove, XPoz - 20, 20, 2
+	Sleep, 50
+	Click
+	MouseMove, Xpoz - 20, 145, 2
+	Sleep, 50
+	Click
+	MouseMove, videoButton1PozX + 10, videoButton1PozY, 2 ; mute first pcp
+	Sleep, 50
+	Click
+	MouseMove, videoButton2PozX + 10, videoButton2PozY, 2 ; mute second pcp
+	Sleep, 50
+	Click
+	BlockInput, MouseMoveOff
 Return
 
 ; --- for debuging only ---
