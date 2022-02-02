@@ -6,7 +6,7 @@ CoordMode, Mouse, Client
 CoordMode, Pixel, Client
 ; Settings
 maxPcpsCount := 49
-debug := true
+debug := 1 ; 0 - never, 1 - only when changed, 2 - always
 refreshTime := 100
 debugWinTransp := 60
 
@@ -102,101 +102,62 @@ If (curWin) {
 			recountFlag := false
 		}
 		
-		maxColumn := min(fieldWidth / 160, pcpsCount+1)
 		pcpsCount++ ; add participant that we could minus in loop
+		; we are looking for highest value of https://www.desmos.com/calculator/7g6narkmky
+
 		Loop {
-			Loop {
-				pcpsCount--
-				bestColumn := Sqrt((9 * fieldWidth * pcpsCount) / (16 * fieldHeight))
-			;	msgbox bestColumn %bestColumn%
-			} Until ((bestColumn <= maxColumn) || (pcpsCount < 1))
+			pcpsCount--
+;
+;https://www.wolframalpha.com/input?i=solve+%28%28h-6*%28p%2Fx-1%29%29%2F%28p%2Fx%29%29%2F9%2B1+%3E+10+for+x
+;https://www.wolframalpha.com/input?i=solve+%28w-6*%28x-1%29%29%2Fx+%3E+160+for+x
 			
-			c := Ceil(pcpsCount / bestColumn)
-			if (c > 0) {
-				m := fieldHeight / (9 * c)
-				nineM := 9 * m
-				nineMP := nineM * pcpsCount
-				lowerRange := Ceil(nineMP / fieldHeight)
-				upperRange := Ceil((-1 * nineMP) / (nineM - fieldHeight))
-				
-				cL := fieldWidth / (16 * lowerRange)
-				rL := fieldHeight / (9 * (Ceil(pcpsCount / lowerRange)))
-				mL := Min(cL, rL)
-				if (lowerRange != upperRange) {
-					cU := fieldWidth / (16 * upperRange)
-					rU := fieldHeight / (9 * (Ceil(pcpsCount / upperRange)))
-					mU := Min(cU, rU)
-					mLU := mU / mL
-					if ((mL > mU) || (mU/mL < 1.04)) {
-						columnsCount := lowerRange
-						maxRatio := mL
-					} else {
-						columnsCount := upperRange
-						maxRatio := mU
-					}
+			minColumn := floor((87 * pcpsCount) / (fieldHeight + 6)) - 1
+			maxColumn := min(pcpsCount, ceil((fieldWidth + 6) / 150))
+			columnsCount := minColumn
+			bestVideoWidth := 0
+			bestColumn := 0
+			Loop {
+				if (columnsCount >= maxColumn) {
+					break
+				}
+				columnsCount++
+				rowsCount := Ceil(pcpsCount / columnsCount)
+				rowsSpace := (rowsCount - 1) * 6
+				columnsSpace := (columnsCount - 1) * 6
+				maxPossWidth := Floor((fieldWidth - columnsSpace) / columnsCount / 16) * 16
+				maxPossHeight := Floor((fieldHeight - rowsSpace) / rowsCount / 9) * 16  
+				if (maxPossWidth < maxPossHeight) {
+					videoWidth := maxPossWidth
 				} else {
-					cU := cL
-					columnsCount := lowerRange
-					maxRatio := mL
+					videoWidth := maxPossHeight
 				}
-				if (cU < m) {
-					rL := fieldHeight / (9 * (Ceil(pcpsCount / (lowerRange - 1))))
-					if (rL > maxRatio) {
-						columnsCount := lowerRange - 1
-						maxRatio := rl
-					}
+				if (videoWidth > bestVideoWidth) {
+					bestVideoWidth := videoWidth
+					bestColumn := columnsCount
 				}
-			} else {
-				columnsCount := pcpsCount
-				maxRatio := 999999
+				if (videoWidth < bestVideoWidth) {
+					break
+				}
 			}
-		} Until (maxRatio >= 10 || (pcpsCount < 0))
-		;msgbox columnsCount %columnsCount%
-		rowsCount := Ceil(pcpsCount / columnsCount)
-		rowsSpace := (rowsCount - 1) * 6
-		columnsSpace := (columnsCount - 1) * 6
-		maxPossHeight := (fieldHeight - rowsSpace) / rowsCount
-		maxPossHeight := Floor(maxPossHeight / 9) * 9
-		maxPossWidth := (fieldWidth - columnsSpace) / columnsCount
-		maxPossWidth := Floor(maxPossWidth / 16) * 16
-		if (maxPossWidth * 0.5625 < maxPossHeight) {
-			videoHeight := maxPossWidth * 0.5625
-			videoWidth := maxPossWidth
-		} else {
-			videoHeight := maxPossHeight
-			videoWidth := maxPossHeight / 0.5625
-		}
+			;;msgbox bestVideoWidth %bestVideoWidth%
+		} Until ((bestVideoWidth >= 160) || (pcpsCount < 0))
+		
 		; windowX - clientX = 8 px
 		; windowY - clientY = 31 px
 		; upper and control panels  - 53 px;
 		; sometimes Zoom decides to make video little smaller - i don't know why :-(
 		; we have to check it
 
-		videoWidth := videoWidth + 16 ; add now, minus in loop
-		videoHeight := videoHeight + 9
-		
-		nr := 0
-		colStr := ""
-		Loop {
-			nr++
-			videoWidth := videoWidth - 16
-			videoHeight := videoHeight - 9
-			videoPozX := Ceil((fieldWidth - (videoWidth * columnsCount + columnsSpace)) / 2) + 6
-			videoPozY := Ceil((fieldHeight - (videoHeight * rowsCount + rowsSpace)) / 2) + 53 + 6
-			pixX := videoPozX + 1
-			pixY := videoPozY + 1
-			if (vsWidth > 0) {
-				videoPozX := videoPozX + vsWidth + 21
-				videoPozY := videoPozY + 36
-				pixX := pixX + vsWidth + 21
-				pixY := pixY + 36
-			}
-			PixelGetColor, color, %pixX%, %pixY%, RGB
-			if (debug) {
-				GuiControl, HelperGUI:Text, helperGuiText, In %nWejscie% In %nWyjscie% %nr%
-			}
-			colStr := colStr . " X " . pixX . " Y " . pixY . " " . SubStr(color, 3, 6)
-		} Until ((color != 0x1A1A1A) || (nr > 1))
+		columnsCount := bestColumn
+		rowsCount := Ceil(pcpsCount / columnsCount)
+		videoWidth := bestVideoWidth
+		videoHeight := bestVideoWidth * 0.5625
+		videoPozX := Ceil((fieldWidth - (videoWidth * columnsCount + columnsSpace)) / 2) + 6
+		videoPozY := Ceil((fieldHeight - (videoHeight * rowsCount + rowsSpace)) / 2) + 53 + 6
+		if (vsWidth > 0) {
+			videoPozX := videoPozX + vsWidth + 21
+			videoPozY := videoPozY + 36
+		}
 		
 		videoButton1PozX := videoPozX + videoWidth + buttonXoffset
 		videoButton1PozY := videoPozY + buttonYoffset
@@ -234,10 +195,12 @@ If (curWin) {
 		if (debug) {
 			videoGuiPozX :=	videoPozX + WinPosX + 8
 			videoGuiPozY :=	videoPozY + WinPosY + 31
-			GuiControl, VideoGUI:Text, Textarea, %fieldWidth%, %fieldHeight%`n%videoWidth% %videoHeight%`nRatio: %maxRatio%`nbestColumn %bestColumn%`nlowerR %lowerRange%, %mL% `nupperR %upperRange% %mU%`nmLU %mLU%`nchangesFlag %changesFlag% recountFlag %recountFlag%`nnr %nr%
+			GuiControl, VideoGUI:Text, Textarea, %fieldWidth%, %fieldHeight%`n%videoWidth% %videoHeight%`n`nbestColumn %bestColumn%
 			Gui, VideoGUI:Show, NoActivate x%videoGuiPozX% y%videoGuiPozY% w%videoWidth% h%videoHeight%
-			;sleep, 200
-			;Gui, VideoGUI:Hide
+			if (debug = 1) {
+				sleep, 200
+				Gui, VideoGUI:Hide
+			}
 		}
 		; ---------
 	}
@@ -277,6 +240,11 @@ Numpad6::
 	SwitchMic(videoButton3PozX, videoButton3PozY, false)
 Return
 
+; lower hand only
+Numpad7::
+	LowerHand(videoButton1PozX, videoButton1PozY)
+Return
+
 F9::
 winTitle := "ahk_class ZPContentViewWndClass"
 curWin := WinExist(winTitle)
@@ -291,7 +259,7 @@ F12::
 	videoShareClass := false
 Return
 
-!NumpadAdd::
+^!NumpadAdd::
 	; --- unmute and spotlight first two participants
 	WinActivate, ahk_class ZPContentViewWndClass
 	BlockInput, MouseMove
@@ -316,7 +284,17 @@ Return
 	BlockInput, MouseMoveOff
 Return
 
-!NumpadSub::
+^+d::
+	if (debug = 2) {
+		debug := 0
+		Gui, VideoGUI:Hide
+		Gui, HelperGUI:Hide
+	} else {
+		debug++
+	}
+Return
+
+^!NumpadSub::
 	; --- remove spotlight and mute first two participants
 	WinActivate, ahk_class ZPContentViewWndClass
 	XPoz := winWidth - listWidth
@@ -335,6 +313,8 @@ Return
 	Click
 	BlockInput, MouseMoveOff
 Return
+
+
 
 ; --- for debuging only ---
 F8::
@@ -360,7 +340,27 @@ if (debug) {
 	Gui, VideoGUI:Hide
 }
 return
-; ---------
+; --------- 
+
+
+; --------- functions ----------
+CountMaxVideoWidth(ByRef fieldWidth, ByRef fieldHeight, ByRef pcpsCount, columnsCount) {
+	rowsCount := Ceil(pcpsCount / columnsCount)
+	rowsSpace := (rowsCount - 1) * 6
+	columnsSpace := (columnsCount - 1) * 6
+	maxPossHeight := (fieldHeight - rowsSpace) / rowsCount
+	maxPossHeight := Floor(maxPossHeight / 9) * 9
+	maxPossWidth := (fieldWidth - columnsSpace) / columnsCount
+	maxPossWidth := Floor(maxPossWidth / 16) * 16
+	if (maxPossWidth * 0.5625 < maxPossHeight) {
+		videoHeight := maxPossWidth * 0.5625
+		videoWidth := maxPossWidth
+	} else {
+		videoHeight := maxPossHeight
+		videoWidth := maxPossHeight / 0.5625
+	}
+	return [videoWidth, videoHeight, rowsCount, rowsSpace, columnsSpace]
+}
 
 SwitchMic(ByRef XPoz, ByRef YPoz, lowerHand := true) {
 	BlockInput, MouseMove
@@ -394,6 +394,19 @@ SwitchMic(ByRef XPoz, ByRef YPoz, lowerHand := true) {
 			Click
 		}
 	}
+	MouseMove, XPoz + 10, YPoz - 30, 2 ; move away from buttons
+	BlockInput, MouseMoveOff
+}
+
+LowerHand(ByRef XPoz, ByRef YPoz) {
+	BlockInput, MouseMove
+	WinActivate, ahk_class ZPContentViewWndClass
+	MouseMove, XPoz, YPoz + 10, 2 ; lower hand
+	;Sleep, 100
+	Click, right
+	MouseMove, XPoz + 20, YPoz + 30, 2
+	;Sleep, 100
+	Click
 	MouseMove, XPoz + 10, YPoz - 30, 2 ; move away from buttons
 	BlockInput, MouseMoveOff
 }
