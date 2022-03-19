@@ -1,4 +1,21 @@
-﻿#SingleInstance force
+﻿; Zoom_mute_unmute.ahk
+; Azariasz Trzcinski, 2022
+; 
+; Checked on Zoom 5.9.3 
+; Participants Window has to be merge to Meeting Window, Gallery view, and show non-video participants!
+;
+; Hotkeys:
+; Numpad 1-9 (depends on participants count) - unmute / mute and lower hand
+; Numpad/ - lower hand first participant
+; Ctrl + Shift + Numpad+ - Unmute and spotlight two first participants
+; Ctrl + Shift + Numpad- - Mute two first participants in Gallery view and remove spotlight
+; F12 - reset saved settings (Unmute button color, Share Screen panel's width, client window's width and height)
+; F8 - show overlay on first five participants (debugging)
+; Ctrl + Shift + D - toggle debuging overlay (hide, show only on changed, show always)
+; F9 - restart app
+
+
+#SingleInstance force
 #NoEnv
 SetBatchLines, -1
 ListLines, Off
@@ -7,8 +24,9 @@ CoordMode, Pixel, Client
 ; Settings
 maxPcpsCount := 49
 debug := 1 ; 0 - never, 1 - only when changed, 2 - always
-refreshTime := 100
+refreshTime := 250
 debugWinTransp := 60
+maxPcpsOp := 5 ; max number (1-9) of participants we want to operate with numpad
 
 ; variables pre-declaration
 oldPcpsCount := 0
@@ -72,9 +90,9 @@ If (curWin) {
 	ControlGetPos, , , listWidth, , zRightPanelContainerClass1, %winTitle%
 	vsWidth := VideoShareWidth(WinPosX, WinPosY)
 	pcpsCount := SubStr(str, 15, -1) ; participant's counter
-	if (pcpsCount > maxPcpsCount) {
+	if (pcpsCount > maxPcpsCount)
 		pcpsCount := maxPcpsCount
-	}
+
 	; We recount video position on:
 	;   * window's resizing
 	;   * window's moving
@@ -82,7 +100,6 @@ If (curWin) {
 	; 	* share screen part resizing
 	;   * participant's panel's resize
 	;   * participant's number changing
-	; changed
 
 	changesFlag := (oldPcpsCount != pcpsCount)
 		|| IsVideoShareChanged()
@@ -112,9 +129,8 @@ If (curWin) {
 		; If we did and there is no more changes we can stop
 
 		recountFlag := true
-		if (!changesFlag && recountFlag) {
+		if (!changesFlag && recountFlag)
 			recountFlag := false
-		}
 
 		pcpsCount++ ; add participant that we could minus in loop
 		; we find the highest value of https://www.desmos.com/calculator/7g6narkmky
@@ -129,27 +145,21 @@ If (curWin) {
 			bestVideoWidth := 0
 			bestColumn := 0
 			Loop {
-				if (columnsCount >= maxColumn) {
+				if (columnsCount >= maxColumn)
 					break
-				}
 				columnsCount++
 				rowsCount := Ceil(pcpsCount / columnsCount)
 				rowsSpace := (rowsCount - 1) * 6
 				columnsSpace := (columnsCount - 1) * 6
 				maxPossWidth := Floor((fieldWidth - columnsSpace) / columnsCount / 16) * 16
 				maxPossHeight := Floor((fieldHeight - rowsSpace) / rowsCount / 9) * 16
-				if (maxPossWidth < maxPossHeight) {
-					videoWidth := maxPossWidth
-				} else {
-					videoWidth := maxPossHeight
-				}
+				videoWidth := (maxPossWidth < maxPossHeight) ? maxPossWidth : maxPossHeight
 				if (videoWidth > bestVideoWidth) {
 					bestVideoWidth := videoWidth
 					bestColumn := columnsCount
 				}
-				if (videoWidth < bestVideoWidth) {
+				if (videoWidth < bestVideoWidth)
 					break
-				}
 			}
 		} Until ((bestVideoWidth >= 160) || (pcpsCount < 0))
 
@@ -167,33 +177,35 @@ If (curWin) {
 			videoPozX := videoPozX + vsWidth + 21
 			videoPozY := videoPozY + 36
 		}
-		videoButton1PozX := videoPozX + videoWidth + buttonXoffset
-		videoButton1PozY := videoPozY + buttonYoffset
-		if (columnsCount > 1) {
-			videoButton2PozX := videoPozX + videoWidth * 2 + 6 + buttonXoffset
-			videoButton2PozY := videoButton1PozY
-			if (columnsCount > 2) {
-				videoButton3PozX := videoPozX + videoWidth * 3 + 12 + buttonXoffset
-				videoButton3PozY := videoButton1PozY
-			} else {
-				if (pcpsCount > 2) {
-					if (pcpsCount = 3) {
-						videoButton3PozX := videoPozX + videoWidth * 1.5 + buttonXoffset
-					} else {
-						videoButton3PozX := videoButton1PozX
-					}
-					videoButton3PozY := videoPozY + videoHeight + 6 + buttonYoffset
-				}
+
+		videoButtonPozX := []
+		videoButtonPozY := []
+		mC := columnsCount
+		modPcps := Mod(pcpsCount, columnsCount)
+		mR := rowsCount
+		offset := 0 ; used in non-full last row
+		nr := 1
+		
+		lR := 1
+		loop {
+			if (lR > mR)
+				break
+			if (modPcps != 0 && lR = mR)
+				offset := Ceil(videoWidth * (columnsCount - modPcps) + 6 * (columnsCount - modPcps - 1)) / 2
+			lC := 1
+			Loop {
+				if (lC > mC)
+					break
+				videoButtonPozX[nr] := videoPozX + offset + videoWidth * lC + 6 * (lc - 1) + buttonXoffset
+				videoButtonPozY[nr] := videoPozY + videoHeight * (lR - 1) + 6 * (lR - 1) + buttonYoffset
+				fn := Func("SwitchMic").Bind(videoButtonPozX[nr], videoButtonPozY[nr])
+				Hotkey, Numpad%nr%, %fn%
+				lc++
+				nr++
+				if (nr > maxPcpsOp)
+					break 2
 			}
-		} else {
-			if (pcpsCount > 1) {
-				videoButton2PozX := videoButton1PozX
-				videoButton2PozY := videoPozY + videoHeight + 6 + buttonYoffset
-				if (pcpsCount > 2) {
-					videoButton3PozX := videoButton1PozX
-					videoButton3PozY := videoPozY + videoHeight * 2 + 12 + buttonYoffset
-				}
-			}
+			lR++
 		}
 		; --- for debuging only ---
 		if (debug) {
@@ -217,21 +229,9 @@ If (curWin) {
 Return
 
 #IfWinActive ahk_class ZPContentViewWndClass
-Numpad1::
-	SwitchMic(videoButton1PozX, videoButton1PozY)
-Return
-
-Numpad2::
-	SwitchMic(videoButton2PozX, videoButton2PozY)
-Return
-
-Numpad3::
-	SwitchMic(videoButton3PozX, videoButton3PozY)
-Return
-
 ; lower hand only
-Numpad7::
-	LowerHand(videoButton1PozX, videoButton1PozY)
+NumpadDiv::
+	LowerHand(videoButtonPozX[1], videoButtonPozY[1])
 Return
 
 ^+NumpadAdd::
@@ -241,10 +241,10 @@ Return
 	}
 	inAction := true
 	WinActivate, ahk_class ZPContentViewWndClass
-	pix1X := videoButton1PozX - buttonXoffset - videoWidth/2
-	pix1Y := videoButton1PozY - buttonYoffset
-	pix2X := videoButton2PozX - buttonXoffset - videoWidth/2
-	pix2Y := videoButton2PozY - buttonYoffset
+	pix1X := videoButtonPozX[1] - buttonXoffset - videoWidth/2
+	pix1Y := videoButtonPozY[1] - buttonYoffset
+	pix2X := videoButtonPozX[2] - buttonXoffset - videoWidth/2
+	pix2Y := videoButtonPozY[2] - buttonYoffset
 	PixelGetColor, color1, %pix1X%, %pix1Y%, RGB
 	PixelGetColor, color2, %pix2X%, %pix2Y%, RGB
 	if (color1 = 0x222222 || color2 = 0x222222) {
@@ -261,21 +261,21 @@ Return
 		return
 	}
 	BlockInput, MouseMove
-	MouseMove, videoButton1PozX + 10, videoButton1PozY, 2 ; unmute first pcp
+	MouseMove, videoButtonPozX[1] + 10, videoButtonPozY[1], 2 ; unmute first pcp
 	Sleep, 50
 	Click
-	MouseMove, videoButton1PozX, videoButton1PozY + 10, 2 ; then spotlight
+	MouseMove, videoButtonPozX[1], videoButtonPozY[1] + 10, 2 ; then spotlight
 	Click, right
-	MouseMove, videoButton1PozX + 20, videoButton1PozY + 135, 2
+	MouseMove, videoButtonPozX[1] + 20, videoButtonPozY[1] + 135, 2
 	Click
 	Sleep, 50
 	Send !{F2} ; change to gallery view
-	MouseMove, videoButton2PozX + 10, videoButton2PozY, 2 ; unmute second pcp
+	MouseMove, videoButtonPozX[2] + 10, videoButtonPozY[2], 2 ; unmute second pcp
 	Sleep, 50
 	Click
-	MouseMove, videoButton2PozX, videoButton2PozY + 10, 2 ; add to spotlight
+	MouseMove, videoButtonPozX[2], videoButtonPozY[2] + 10, 2 ; add to spotlight
 	Click, right
-	MouseMove, videoButton2PozX + 20, videoButton2PozY + 130, 2
+	MouseMove, videoButtonPozX[2] + 20, videoButtonPozY[2] + 135, 2
 	Click
 	Sleep, 50
 	Send !{F2} ; change to gallery view
@@ -295,13 +295,13 @@ Return
 	MouseMove, XPoz - 20, 20, 2
 	Sleep, 50
 	Click
-	MouseMove, Xpoz - 20, 145, 2
+	MouseMove, Xpoz - 20, 120, 2
 	Sleep, 50
 	Click
-	MouseMove, videoButton1PozX + 10, videoButton1PozY, 2 ; mute first pcp
+	MouseMove, videoButtonPozX[1] + 10, videoButtonPozY[1], 2 ; mute first pcp
 	Sleep, 50
 	Click
-	MouseMove, videoButton2PozX + 10, videoButton2PozY, 2 ; mute second pcp
+	MouseMove, videoButtonPozX[2] + 10, videoButtonPozY[2], 2 ; mute second pcp
 	Sleep, 50
 	Click
 	BlockInput, MouseMoveOff
@@ -332,38 +332,33 @@ Return
 		Gui, HelperGUI:Hide
 	} else {
 		debug++
-		if (debug = 2) {
+		if (debug = 2)
 			Gui, VideoGUI:Show, NoActivate x%videoGuiPozX% y%videoGuiPozY% w%videoWidth% h%videoHeight%
-		}
 	}
 Return
 
 F8::
-	if (inAction) {
+	if (inAction)
 		return
-	}
 	inAction := true
 	WinActivate, ahk_class ZPContentViewWndClass
 	MouseGetPos, mouseX, mouseY
 	BlockInput, MouseMove
-	if (debug) {
+	if (debug)
 		Gui, VideoGUI:Show, NoActivate x%videoGuiPozX% y%videoGuiPozY% w%videoWidth% h%videoHeight%
+	l := (maxPcpsOp < pcpsCount) ? maxPcpsOp : pcpsCount
+	Loop, %l% {
+		MouseMove, videoButtonPozX[A_Index], videoButtonPozY[A_Index], 2
+		x := WinPosX + 8 + videoButtonPozX[A_Index] - buttonXoffset - videoWidth
+		y := WinPosY + 31 + videoButtonPozY[A_Index] - buttonYoffset
+		Gui, VideoGUI:Show, NoActivate x%x% y%y% w%videoWidth% h%videoHeight%
+		Sleep, 50
 	}
-	MouseMove, videoButton1PozX, videoButton1PozY, 2 ; first participant
-	Sleep, 200
-	if (pcpsCount > 1) {
-		MouseMove, videoButton2PozX, videoButton2PozY, 2 ; second participant
-		Sleep, 200
-		if (pcpsCount > 2) {
-			MouseMove, videoButton3PozX, videoButton3PozY, 2 ; third participant
-			Sleep, 200
-		}
-	}	
+	
 	MouseMove, mouseX, mouseY, 2 ; return
 	BlockInput, MouseMoveOff
-	if (debug) {
+	if (debug)
 		Gui, VideoGUI:Hide
-	}
 	inAction := false
 return
 
@@ -385,23 +380,17 @@ IsHandRised(ByRef XPoz, ByRef YPoz){
 	pixX :=	XPoz - buttonXoffset - videoWidth + handXOffset
 	pixY := YPoz - buttonYoffset + handYOffset
 	PixelGetColor, color, %pixX%, %pixY%, RGB
-	if (color = 0xFCD5B2 || color = 0xFDCA47 || color = 0xEBBEA0) {
-		return true
-	} else {
-		return false
-	}
+	return color = 0xFCD5B2 || color = 0xFDCA47 || color = 0xEBBEA0
 }
 
 SwitchMic(ByRef XPoz, ByRef YPoz) {
-	if (inAction){
+	if (inAction)
 		return
-	}
 	inAction := true
 	BlockInput, MouseMove
 	WinActivate, ahk_class ZPContentViewWndClass
-	if (!buttonColor) {
+	if (!buttonColor)
 		buttonColor := getButtonColor(XPoz, YPoz)
-	}
 	MouseMove, XPoz, YPoz, 1
 	Sleep, 50
 	PixelGetColor, color, %XPoz%, %YPoz%, RGB
@@ -425,12 +414,10 @@ SwitchMic(ByRef XPoz, ByRef YPoz) {
 }
 
 LowerHand(ByRef XPoz, ByRef YPoz) {
-	if (inAction) {
+	if (inAction)
 		return
-	}
-	if (!IsHandRised(XPoz, YPoz)) {
+	if (!IsHandRised(XPoz, YPoz))
 		return
-	}
 	inAction := true
 	BlockInput, MouseMove
 	WinActivate, ahk_class ZPContentViewWndClass
@@ -456,7 +443,6 @@ GetButtonColor(ByRef XPoz, ByRef YPoz){
 		Sleep 50
 		PixelGetColor, color2, %pixX%, %pixY%, RGB ; onMouseOver, should be 0D68D8
 	} Until ((color1 != color2 ) || (nr > 5))
-	msgbox, %nr% %color1% %color2%
 	return [color1, color2]
 }
 
@@ -485,9 +471,8 @@ IsVideoShareChanged() {
 VideoShareWidth(ByRef XPoz, ByRef YPoz) {
 	; There is a problem to get "ahk_class [TAB]ZPControlPanelHintClass" because of TAB char
 	if (WinExist("Screen share viewing options")) {
-		if (!videoShareClass) {
+		if (!videoShareClass)
 			videoShareClass := GetVideoShareClass(XPoz, YPoz)
-		}
 		ControlGetPos, , , w,, %videoShareClass%, ahk_class ZPContentViewWndClass
 		return w
 	}
