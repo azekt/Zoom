@@ -5,6 +5,7 @@
 ; Participants Window has to be merge to Meeting Window, Gallery view, and show non-video participants!
 ;
 ; Hotkeys:
+; Numpad* - admit from Waiting Room
 ; Numpad 1-9 (depends on participants count) - unmute / mute and lower hand
 ; Numpad/ - lower hand first participant
 ; Ctrl + Shift + Numpad+ - Unmute and spotlight two first participants
@@ -87,12 +88,14 @@ If (curWin) {
 	}
 	
 	ControlGetText, str, zPlistWndClass1, %winTitle%
-	ControlGetPos, , , listWidth, , zRightPanelContainerClass1, %winTitle%
+	ControlGetPos, listX, listY, listWidth, , zRightPanelContainerClass1, %winTitle%
 	vsWidth := VideoShareWidth(WinPosX, WinPosY)
 	pcpsCount := SubStr(str, 15, -1) ; participant's counter
 	if (pcpsCount > maxPcpsCount)
 		pcpsCount := maxPcpsCount
 
+	if (bgcolor = 0xFFFFFF && WinActive(winTitle))
+	;	msgbox, "MAMY GOŚCIA"
 	; We recount video position on:
 	;   * window's resizing
 	;   * window's moving
@@ -270,6 +273,7 @@ Return
 	Click
 	Sleep, 50
 	Send !{F2} ; change to gallery view
+	Sleep, 100
 	MouseMove, videoButtonPozX[2] + 10, videoButtonPozY[2], 2 ; unmute second pcp
 	Sleep, 50
 	Click
@@ -293,20 +297,50 @@ Return
 	XPoz := winWidth - listWidth
 	BlockInput, MouseMove
 	MouseMove, XPoz - 20, 20, 2
-	Sleep, 50
+	Sleep, 100
 	Click
 	MouseMove, Xpoz - 20, 120, 2
-	Sleep, 50
+	Sleep, 100
 	Click
 	MouseMove, videoButtonPozX[1] + 10, videoButtonPozY[1], 2 ; mute first pcp
-	Sleep, 50
+	Sleep, 100
 	Click
 	MouseMove, videoButtonPozX[2] + 10, videoButtonPozY[2], 2 ; mute second pcp
-	Sleep, 50
+	Sleep, 100
 	Click
 	BlockInput, MouseMoveOff
 	inAction := false
 Return
+
+NumpadMult::
+	; admit from Waiting Room
+	winTitle := "ahk_class ZPContentViewWndClass"
+	WinActivate, %winTitle%
+	ControlGetPos, listX, listY, listWidth,, zRightPanelContainerClass1, %winTitle%
+	pixX := listX + 23
+	pixY := listY + 25
+	PixelGetColor, bgcolor, %pixX%, %pixY%, RGB
+	if (bgcolor = 0xFFFFFF) {
+		nr := 0
+		pixY := pixY + 40
+		loop {
+			pixY := pixY + 40
+			PixelGetColor, bgcolor, %pixX%, %pixY%, RGB
+			nr++
+		} until (bgcolor = 0xFFFFFF)
+	
+		mouseX := listX + listWidth - 50
+		mouseY := listY + 75
+		loop, %nr%{
+			MouseMove, mouseX, mouseY
+			mouseY := mouseY + 40
+			Sleep, 50
+			Click
+			Sleep, 50
+		}
+	}
+Return 
+	
 
 F12::
 	videoShareClass := false
