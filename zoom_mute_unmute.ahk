@@ -94,8 +94,6 @@ If (curWin) {
 	if (pcpsCount > maxPcpsCount)
 		pcpsCount := maxPcpsCount
 
-	if (bgcolor = 0xFFFFFF && WinActive(winTitle))
-	;	msgbox, "MAMY GOŚCIA"
 	; We recount video position on:
 	;   * window's resizing
 	;   * window's moving
