@@ -1,19 +1,21 @@
 ﻿; Zoom_mute_unmute.ahk
 ; Azariasz Trzcinski, 2022
 ; 
-; Checked on Zoom 5.9.3 
+; Checked on Zoom 5.10.6
 ; Participants Window has to be merge to Meeting Window, Gallery view, and show non-video participants!
 ;
 ; Hotkeys:
-; Numpad* - admit from Waiting Room
+; Numpad*                                    - admit from Waiting Room
 ; Numpad 1-9 (depends on participants count) - unmute / mute and lower hand
-; Numpad/ - lower hand first participant
-; Ctrl + Shift + Numpad+ - Unmute and spotlight two first participants
-; Ctrl + Shift + Numpad- - Mute two first participants in Gallery view and remove spotlight
-; F12 - reset saved settings (Unmute button color, Share Screen panel's width, client window's width and height)
-; F8 - show overlay on first five participants (debugging)
-; Ctrl + Shift + D - toggle debuging overlay (hide, show only on changed, show always)
-; F9 - restart app
+; Numpad/                                    - lower hand first participant
+; Ctrl + Shift + Numpad+                     - Unmute and spotlight two first participants
+; Ctrl + Shift + WinLeft + Numpad+           - Unmute and spotlight only first participant
+; Ctrl + Shift + Numpad-                     - Mute two first participants in Gallery view and remove spotlight (global shortcut!)
+; Ctrl + Shift + WinLeft + Numpad-           - Mute first participant in Gallery view and remove spotlight (global shortcut!)
+; F12                                        - reset saved settings (Unmute button color, Share Screen panel's width, client window's width and height)
+; F8                                         - show overlay on first five participants (debugging)
+; Ctrl + Shift + D                           - toggle debuging overlay (hide, show only on changed, show always)
+; F9                                         - restart app
 
 
 #SingleInstance force
@@ -39,6 +41,7 @@ oldListWidth := 0
 oldVSWidth := 0
 recountFlag := false
 
+global screenWidth := 1920
 global buttonXoffset := -70
 global buttonYoffset := 21
 global clientWidthDiff := 0
@@ -49,6 +52,7 @@ global videoShare := false
 global videoShareClass := false
 global buttonColor := false
 global inAction := false ; prevent from doing another action before end current one
+global moveToSecondScreen := true ; move whole window to second screen and enter full screen mode after spotlight
 
 ; --- for debuging only ---
 if (debug) {
@@ -75,7 +79,7 @@ CheckParticipants:
 winTitle := "ahk_class ZPContentViewWndClass"
 curWin := WinExist(winTitle)
 If (curWin) {
-	WinGetPos, WinPosX, WinPosY, winWidth, winHeight, %winTitle%
+	WinGetPos, winPosX, winPosY, winWidth, winHeight, %winTitle%
 	if (!clientWidthDiff) {
 		wW := winWidth
 		wH := winHeight
@@ -89,7 +93,7 @@ If (curWin) {
 	
 	ControlGetText, str, zPlistWndClass1, %winTitle%
 	ControlGetPos, listX, listY, listWidth, , zRightPanelContainerClass1, %winTitle%
-	vsWidth := VideoShareWidth(WinPosX, WinPosY)
+	vsWidth := VideoShareWidth(winPosX, winPosY)
 	pcpsCount := SubStr(str, 15, -1) ; participant's counter
 	if (pcpsCount > maxPcpsCount)
 		pcpsCount := maxPcpsCount
@@ -105,8 +109,8 @@ If (curWin) {
 	changesFlag := (oldPcpsCount != pcpsCount)
 		|| IsVideoShareChanged()
 		|| (vsWidth != oldVSWidth)
-		|| (WinPosX != oldWinPosX)
-		|| (WinPosY != oldWinPosY)
+		|| (winPosX != oldWinPosX)
+		|| (winPosY != oldWinPosY)
 		|| (winWidth != oldWinWidth)
 		|| (winHeight != oldWinHeight)
 		|| (oldListWidth != listWidth)
@@ -114,8 +118,8 @@ If (curWin) {
 	if (changesFlag || recountFlag) {
 		oldPcpsCount := pcpsCount
 		oldVSWidth := vsWidth
-		oldWinPosX := WinPosX
-		oldWinPosY := WinPosY
+		oldWinPosX := winPosX
+		oldWinPosY := winPosY
 		oldWinWidth := winWidth
 		oldWinHeight := winHeight
 		oldListWidth := listWidth
@@ -210,10 +214,10 @@ If (curWin) {
 		}
 		; --- for debuging only ---
 		if (debug) {
-			; actual window X - WinPosX = 8 px
-			; actual window Y - WinPosY = 31 px
-			videoGuiPozX :=	WinPosX + 8 + videoPozX
-			videoGuiPozY :=	WinPosY + 31 + videoPozY
+			; actual window X - winPosX = 8 px
+			; actual window Y - winPosY = 31 px
+			videoGuiPozX :=	winPosX + 8 + videoPozX
+			videoGuiPozY :=	winPosY + 31 + videoPozY
 			GuiControl, VideoGUI:Text, Textarea, field size: %fieldWidth% %fieldHeight%`nvideo size: %videoWidth% %videoHeight%`nvideo poz.: %videoPozX% %videoPozY%`nbestColumn %bestColumn%
 			Gui, VideoGUI:Show, NoActivate x%videoGuiPozX% y%videoGuiPozY% w%videoWidth% h%videoHeight%
 			if (debug = 1) {
@@ -229,94 +233,39 @@ If (curWin) {
 }
 Return
 
+; --- GLOBAL shortcut! ---
+^+NumpadSub::
+^+#NumpadSub::
+	; --- unmute myself, remove spotlight and mute first (or two) participant(s)
+	RemoveSpotlight(videoButtonPozX, videoButtonPozY)
+Return
+
 #IfWinActive ahk_class ZPContentViewWndClass
-; lower hand only
+
 NumpadDiv::
+	; lower hand only
 	LowerHand(videoButtonPozX[1], videoButtonPozY[1])
 Return
 
 ^+NumpadAdd::
-	; --- unmute and spotlight first two participants
-	if (inAction) {
-		return
-	}
-	inAction := true
-	WinActivate, ahk_class ZPContentViewWndClass
-	pix1X := videoButtonPozX[1] - buttonXoffset - videoWidth/2
-	pix1Y := videoButtonPozY[1] - buttonYoffset
-	pix2X := videoButtonPozX[2] - buttonXoffset - videoWidth/2
-	pix2Y := videoButtonPozY[2] - buttonYoffset
-	PixelGetColor, color1, %pix1X%, %pix1Y%, RGB
-	PixelGetColor, color2, %pix2X%, %pix2Y%, RGB
-	if (color1 = 0x222222 || color2 = 0x222222) {
-		inAction := false
-		helperGuiTextWidth := 375
-		Gui, HelperGUI:Color, FF0000
-		GuiControl, HelperGUI:Move, helperGuiText, w%helperGuiTextWidth% Center
-		GuiControl, HelperGUI:Text, helperGuiText,⚠ You cannot spotlight participants without video!
-		helperGuiPozX := WinPosX + 8 + fieldWidth/2 - helperGuiTextWidth/2
-		helperGuiPozY := WinPosY + 31 + 5
-		Gui, HelperGUI:Show, NoActivate x%helperGuiPozX% y%helperGuiPozY% h30 w%helperGuiTextWidth%
-		Sleep, 3000
-		Gui, HelperGUI:Hide
-		return
-	}
-	BlockInput, MouseMove
-	MouseMove, videoButtonPozX[1] + 10, videoButtonPozY[1], 2 ; unmute first pcp
-	Sleep, 50
-	Click
-	MouseMove, videoButtonPozX[1], videoButtonPozY[1] + 10, 2 ; then spotlight
-	Click, right
-	MouseMove, videoButtonPozX[1] + 20, videoButtonPozY[1] + 135, 2
-	Click
-	Sleep, 50
-	Send !{F2} ; change to gallery view
-	Sleep, 100
-	MouseMove, videoButtonPozX[2] + 10, videoButtonPozY[2], 2 ; unmute second pcp
-	Sleep, 50
-	Click
-	MouseMove, videoButtonPozX[2], videoButtonPozY[2] + 10, 2 ; add to spotlight
-	Click, right
-	MouseMove, videoButtonPozX[2] + 20, videoButtonPozY[2] + 135, 2
-	Click
-	Sleep, 50
-	Send !{F2} ; change to gallery view
-	BlockInput, MouseMoveOff
-	inAction := false
+	; --- mute myself, unmute and spotlight first two participants
+	Spotlight(videoButtonPozX, videoButtonPozY, winPosX, winPosY, fieldWidth, true)
+Return 
+
+^+#NumpadAdd::
+	; --- mute myself, unmute and spotlight only first participant
+	Spotlight(videoButtonPozX, videoButtonPozY, winPosX, winPosY, fieldWidth, false)
 Return
 
-^+NumpadSub::
-	; --- remove spotlight and mute first two participants
-	if (inAction) {
-		return
-	}
-	inAction := true
-	WinActivate, ahk_class ZPContentViewWndClass
-	XPoz := winWidth - listWidth
-	BlockInput, MouseMove
-	MouseMove, XPoz - 20, 20, 2
-	Sleep, 100
-	Click
-	MouseMove, Xpoz - 20, 120, 2
-	Sleep, 100
-	Click
-	MouseMove, videoButtonPozX[1] + 10, videoButtonPozY[1], 2 ; mute first pcp
-	Sleep, 100
-	Click
-	MouseMove, videoButtonPozX[2] + 10, videoButtonPozY[2], 2 ; mute second pcp
-	Sleep, 100
-	Click
-	BlockInput, MouseMoveOff
-	inAction := false
-Return
+
 
 NumpadMult::
 	; admit from Waiting Room
 	winTitle := "ahk_class ZPContentViewWndClass"
 	WinActivate, %winTitle%
-	ControlGetPos, listX, listY, listWidth,, zRightPanelContainerClass1, %winTitle%
+	ControlGetPos, listX, listY, listWidth,, zPlistWndClass1, %winTitle%
 	pixX := listX + 23
-	pixY := listY + 25
+	pixY := listY + 23
 	PixelGetColor, bgcolor, %pixX%, %pixY%, RGB
 	if (bgcolor = 0xFFFFFF) {
 		nr := 0
@@ -349,8 +298,8 @@ F12::
 	Gui, HelperGUI:Color, 00FF00
 	GuiControl, HelperGUI:Move, helperGuiText, w%helperGuiTextWidth% Center
 	GuiControl, HelperGUI:Text, helperGuiText,The saved button color and screen size have been reset.
-	helperGuiPozX := WinPosX + 8 + fieldWidth/2 - helperGuiTextWidth/2
-	helperGuiPozY := WinPosY + 31 + 5
+	helperGuiPozX := winPosX + 8 + fieldWidth/2 - helperGuiTextWidth/2
+	helperGuiPozY := winPosY + 31 + 5
 	Gui, HelperGUI:Show, NoActivate x%helperGuiPozX% y%helperGuiPozY% h30 w%helperGuiTextWidth%
 	Sleep, 3000
 	Gui, HelperGUI:Hide
@@ -381,8 +330,8 @@ F8::
 	l := (maxPcpsOp < pcpsCount) ? maxPcpsOp : pcpsCount
 	Loop, %l% {
 		MouseMove, videoButtonPozX[A_Index], videoButtonPozY[A_Index], 2
-		x := WinPosX + 8 + videoButtonPozX[A_Index] - buttonXoffset - videoWidth
-		y := WinPosY + 31 + videoButtonPozY[A_Index] - buttonYoffset
+		x := winPosX + 8 + videoButtonPozX[A_Index] - buttonXoffset - videoWidth
+		y := winPosY + 31 + videoButtonPozY[A_Index] - buttonYoffset
 		Gui, VideoGUI:Show, NoActivate x%x% y%y% w%videoWidth% h%videoHeight%
 		Sleep, 50
 	}
@@ -460,6 +409,119 @@ LowerHand(ByRef XPoz, ByRef YPoz) {
 	MouseMove, XPoz + 10, YPoz - 30, 2 ; move away from the buttons
 	BlockInput, MouseMoveOff
 	inAction := false
+}
+
+Spotlight(ByRef videoButtonPozX, ByRef videoButtonPozY, ByRef winPosX, ByRef winPosY, ByRef fieldWidth, twoParticipants) {
+	if (inAction) {
+		return
+	}
+	inAction := true
+	WinActivate, ahk_class ZPContentViewWndClass
+
+	pix1X := videoButtonPozX[1] - buttonXoffset - videoWidth/2
+	pix1Y := videoButtonPozY[1] - buttonYoffset
+	PixelGetColor, color1, %pix1X%, %pix1Y%, RGB
+	color2 := 0x000000
+	if (twoParticipants) {
+		pix2X := videoButtonPozX[2] - buttonXoffset - videoWidth/2
+		pix2Y := videoButtonPozY[2] - buttonYoffset
+		PixelGetColor, color2, %pix2X%, %pix2Y%, RGB
+	}
+
+	if (color1 = 0x222222 || color2 = 0x222222) {
+		inAction := false
+		helperGuiTextWidth := 375
+		Gui, HelperGUI:Color, FF0000
+		GuiControl, HelperGUI:Move, helperGuiText, w%helperGuiTextWidth% Center
+		GuiControl, HelperGUI:Text, helperGuiText,⚠ You cannot spotlight participants without video!
+		helperGuiPozX := winPosX + 8 + fieldWidth/2 - helperGuiTextWidth/2
+		helperGuiPozY := winPosY + 31 + 5
+		Gui, HelperGUI:Show, NoActivate x%helperGuiPozX% y%helperGuiPozY% h30 w%helperGuiTextWidth%
+		Sleep, 3000
+		Gui, HelperGUI:Hide
+		return
+	}
+	BlockInput, MouseMove
+	MouseMove, videoButtonPozX[1] + 10, videoButtonPozY[1], 2 ; unmute first pcp
+	Sleep, 50
+	Click
+	MouseMove, videoButtonPozX[1], videoButtonPozY[1] + 10, 2 ; then spotlight
+	Click, right
+	MouseMove, videoButtonPozX[1] + 20, videoButtonPozY[1] + 135, 2
+	Click
+	if (twoParticipants) {
+		Sleep, 50
+		Send !{F2} ; change to gallery view
+		Sleep, 100
+		MouseMove, videoButtonPozX[2] + 10, videoButtonPozY[2], 2 ; unmute second pcp
+		Sleep, 50
+		Click
+		MouseMove, videoButtonPozX[2], videoButtonPozY[2] + 10, 2 ; add to spotlight
+		Click, right
+		Sleep, 100
+		MouseMove, videoButtonPozX[2] + 20, videoButtonPozY[2] + 135, 2
+		Click
+	}
+	if (moveToSecondScreen) {
+		Send !m ; mute myself
+		Sleep, 50
+		Send !{F1} ; change to speaker view
+		Sleep, 200
+		Send !f ; full screen mode
+		Sleep, 300
+		Send #+{Right} ; move to second screen
+		Sleep, 300
+		Send {Alt}
+		Sleep, 300
+	}
+	BlockInput, MouseMoveOff
+	inAction := false
+	Return
+}
+
+RemoveSpotlight(ByRef videoButtonPozX, ByRef videoButtonPozY) {
+	if (inAction) {
+		return
+	}
+	inAction := true
+	WinActivate, ahk_class ZPContentViewWndClass
+	pixX := screenWidth / 2
+	pixY := 100
+	PixelGetColor, pixColor, %pixX%, %pixY%, RGB
+	if (pixColor = 0x1A1A1A) {
+		howManyPcps := 2
+	} else {
+		howManyPcps := 1
+	}
+	if (moveToSecondScreen) {
+		Send #+{Left}
+		Sleep, 300
+		Send !f
+		Sleep, 200
+		Send {Alt}
+		Sleep, 300
+		Send !{F2} ; change to speaker view
+		Sleep, 100
+		Send !m ; unmute myself
+		Sleep, 100
+	}
+	BlockInput, MouseMove
+	Send !{F2} ; change to gallery view
+	Sleep, 100
+	Loop, %howManyPcps% {
+		MouseMove, videoButtonPozX[1] + 10, videoButtonPozY[1], 2 ; mute first pcp
+		Sleep, 100
+		Click
+		MouseMove, videoButtonPozX[1], videoButtonPozY[1] + 10, 2 ; then remove spotlight
+		Click, right
+		Sleep, 100
+		MouseMove, videoButtonPozX[1] + 20, videoButtonPozY[1] + 135, 2
+		Click
+		Sleep, 100
+	}
+	BlockInput, MouseMoveOff
+	inAction := false
+	Return
 }
 
 GetButtonColor(ByRef XPoz, ByRef YPoz){
