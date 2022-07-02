@@ -1,7 +1,7 @@
 ﻿; Zoom_mute_unmute.ahk
 ; Azariasz Trzcinski, 2022
 ; 
-; Checked on Zoom 5.10.6
+; Checked on Zoom 5.11.0
 ; Participants Window has to be merge to Meeting Window, Gallery view, and show non-video participants!
 ;
 ; Hotkeys:
@@ -355,13 +355,13 @@ IsHandRised(ByRef XPoz, ByRef YPoz){
 		handXOffset := 22
 		handYOffset := 33
 	} else {
-		handXOffset := 32
+		handXOffset := 28
 		handYOffset := 50
 	}
 	pixX :=	XPoz - buttonXoffset - videoWidth + handXOffset
 	pixY := YPoz - buttonYoffset + handYOffset
 	PixelGetColor, color, %pixX%, %pixY%, RGB
-	return color = 0xFCD5B2 || color = 0xFDCA47 || color = 0xEBBEA0
+	return color = 0xFFC940 || color = 0xFFD8B4 || color = 0xEBC199
 }
 
 SwitchMic(ByRef XPoz, ByRef YPoz) {
